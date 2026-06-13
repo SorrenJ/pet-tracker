@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(npm run *)",
-      "Bash(Get-Content \"C:\\\\Users\\\\soale\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-soale-code-projs-pet-tracker\\\\3df97d1a-b5e0-45b7-8d78-1a57be57cef4\\\\tasks\\\\b9gu593c9.output\")"
-    ]
-  }
-}
