@@ -66,7 +66,10 @@ export interface HealthDocument {
   category: DocCategory;
   name: string;
   date: string;
+  /** Base64 data URL — used by localStorage storage */
   fileData?: string;
+  /** Server/cloud URL — returned by the backend API */
+  fileUrl?: string;
   fileType?: string;
   fileName?: string;
   notes?: string;

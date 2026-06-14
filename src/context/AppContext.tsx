@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import type { AppState, Pet, MealLog, MealReminder, MealBudget, ExerciseSession, ExerciseReminder, HealthDocument, DistanceUnit } from '../types';
-import { loadState, saveState, generateId } from '../utils/storage';
+import { loadState, saveState } from '../utils/storage';
 
 type Action =
-  | { type: 'ADD_PET'; pet: Omit<Pet, 'id'> }
+  | { type: 'SET_PETS'; pets: Pet[] }
+  | { type: 'ADD_PET'; pet: Pet }
   | { type: 'UPDATE_PET'; pet: Pet }
   | { type: 'DELETE_PET'; petId: string }
   | { type: 'SET_ACTIVE_PET'; petId: string }
@@ -25,10 +26,14 @@ type Action =
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case 'SET_PETS': {
+      const ids = new Set(action.pets.map(p => p.id));
+      const activePetId = ids.has(state.activePetId ?? '') ? state.activePetId : (action.pets[0]?.id ?? null);
+      return { ...state, pets: action.pets, activePetId };
+    }
     case 'ADD_PET': {
-      const pet: Pet = { ...action.pet, id: generateId() };
-      const pets = [...state.pets, pet];
-      return { ...state, pets, activePetId: state.activePetId ?? pet.id };
+      const pets = [...state.pets, action.pet];
+      return { ...state, pets, activePetId: state.activePetId ?? action.pet.id };
     }
     case 'UPDATE_PET':
       return { ...state, pets: state.pets.map(p => p.id === action.pet.id ? action.pet : p) };
