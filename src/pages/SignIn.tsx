@@ -3,9 +3,10 @@ import { useNavigate, Link } from 'react-router-dom';
 import { PawPrint } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
+import { GoogleSignInButton } from '../components/GoogleSignInButton';
 
 export function SignIn() {
-  const { user, login } = useAuth();
+  const { user, login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -31,6 +32,19 @@ export function SignIn() {
     }
   }
 
+  async function handleGoogleSuccess(idToken: string) {
+    setError('');
+    setLoading(true);
+    try {
+      await loginWithGoogle(idToken);
+      navigate('/', { replace: true });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
@@ -48,6 +62,14 @@ export function SignIn() {
               {error}
             </div>
           )}
+
+          <div>
+            <GoogleSignInButton onSuccess={handleGoogleSuccess} onError={message => setError(message)} />
+          </div>
+          <div className="relative text-center text-sm text-gray-500">
+            <span className="bg-white px-2">or continue with email</span>
+            <div className="absolute inset-x-0 top-1/2 h-px bg-gray-200" />
+          </div>
 
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
