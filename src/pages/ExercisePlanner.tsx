@@ -15,7 +15,7 @@ import type { ExerciseReminder } from '../types';
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function LogSessionModal({ onClose }: { onClose: () => void }) {
-  const { dispatch, activePet } = useApp();
+  const { dispatch, activePet, addExerciseSession } = useApp();
   const [steps, setSteps] = useState('');
   const [duration, setDuration] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -26,17 +26,14 @@ function LogSessionModal({ onClose }: { onClose: () => void }) {
     if (!activePet) return;
     const s = parseInt(steps);
     const km = stepsToKm(s, activePet.species);
-    dispatch({
-      type: 'ADD_EXERCISE_SESSION',
-      session: {
-        petId: activePet.id,
-        date: new Date(date).toISOString(),
-        steps: s,
-        distanceKm: km,
-        durationMinutes: parseInt(duration),
-        notes: notes || undefined,
-      },
-    });
+    addExerciseSession({
+      petId: activePet.id,
+      date: new Date(date).toISOString(),
+      steps: s,
+      distanceKm: km,
+      durationMinutes: parseInt(duration),
+      notes: notes || undefined,
+    }).catch(() => undefined);
     onClose();
   }
 
@@ -204,16 +201,13 @@ export function ExercisePlanner() {
   function handleStopTracking() {
     if (!activePet || sessionSteps === 0) { setTracking(false); setSessionSteps(0); setSessionSeconds(0); return; }
     const km = stepsToKm(sessionSteps, activePet.species);
-    dispatch({
-      type: 'ADD_EXERCISE_SESSION',
-      session: {
-        petId: activePet.id,
-        date: new Date().toISOString(),
-        steps: sessionSteps,
-        distanceKm: km,
-        durationMinutes: Math.round(sessionSeconds / 60),
-      },
-    });
+    addExerciseSession({
+      petId: activePet.id,
+      date: new Date().toISOString(),
+      steps: sessionSteps,
+      distanceKm: km,
+      durationMinutes: Math.round(sessionSeconds / 60),
+    }).catch(() => undefined);
     setTracking(false);
     setSessionSteps(0);
     setSessionSeconds(0);

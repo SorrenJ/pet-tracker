@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { format } from 'date-fns';
 import { Plus, Trash2, FileText, Stethoscope, Pill, Receipt, Search, Eye, X, Download } from 'lucide-react';
 import { useApp, useActivePetData } from '../context/AppContext';
+import * as healthDocsApi from '../api/healthDocs';
 import { EmptyPet } from '../components/EmptyPet';
 import { Modal } from '../components/Modal';
 import type { DocCategory, HealthDocument } from '../types';
@@ -18,7 +19,7 @@ function getCategoryInfo(cat: DocCategory) {
 }
 
 function AddDocModal({ onClose }: { onClose: () => void }) {
-  const { dispatch, activePet } = useApp();
+  const { dispatch, activePet, addHealthDoc } = useApp();
   const [name, setName] = useState('');
   const [category, setCategory] = useState<DocCategory>('vet_record');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -27,11 +28,13 @@ function AddDocModal({ onClose }: { onClose: () => void }) {
   const [fileData, setFileData] = useState<string | undefined>(undefined);
   const [fileType, setFileType] = useState<string | undefined>(undefined);
   const [fileName, setFileName] = useState<string | undefined>(undefined);
+  const [fileFile, setFileFile] = useState<File | undefined>(undefined);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setFileFile(file);
     setFileName(file.name);
     setFileType(file.type);
     const reader = new FileReader();
@@ -42,20 +45,19 @@ function AddDocModal({ onClose }: { onClose: () => void }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!activePet) return;
-    dispatch({
-      type: 'ADD_HEALTH_DOC',
-      doc: {
-        petId: activePet.id,
-        name,
-        category,
-        date,
-        notes: notes || undefined,
-        amount: amount ? parseFloat(amount) : undefined,
-        fileData,
-        fileType,
-        fileName,
-      },
-    });
+    const payload = {
+      petId: activePet.id,
+      category,
+      name,
+      date,
+      notes: notes || undefined,
+      amount: amount ? parseFloat(amount) : undefined,
+      file: fileFile,
+      fileData,
+      fileType,
+      fileName,
+    };
+    addHealthDoc(payload as any).catch(() => undefined);
     onClose();
   }
 
@@ -123,7 +125,7 @@ function AddDocModal({ onClose }: { onClose: () => void }) {
             <div className="flex items-center gap-2 justify-center text-sm text-gray-600">
               <FileText size={16} className="text-rose-500" />
               <span className="truncate max-w-[200px]">{fileName}</span>
-              <button type="button" onClick={e => { e.stopPropagation(); setFileData(undefined); setFileName(undefined); setFileType(undefined); }}>
+              <button type="button" onClick={e => { e.stopPropagation(); setFileData(undefined); setFileName(undefined); setFileType(undefined); setFileFile(undefined); }}>
                 <X size={14} className="text-gray-400" />
               </button>
             </div>
@@ -157,11 +159,13 @@ function AddDocModal({ onClose }: { onClose: () => void }) {
 function DocViewer({ doc, onClose }: { doc: HealthDocument; onClose: () => void }) {
   const catInfo = getCategoryInfo(doc.category);
   const Icon = catInfo.icon;
+  const [fullscreenImage, setFullscreenImage] = useState(false);
+  const fileUrl = doc.fileData || doc.fileUrl;
 
   function handleDownload() {
-    if (!doc.fileData || !doc.fileName) return;
+    if (!fileUrl || !doc.fileName) return;
     const a = document.createElement('a');
-    a.href = doc.fileData;
+    a.href = fileUrl;
     a.download = doc.fileName;
     a.click();
   }
@@ -187,20 +191,34 @@ function DocViewer({ doc, onClose }: { doc: HealthDocument; onClose: () => void 
           <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">{doc.notes}</p>
         </div>
       )}
-      {doc.fileData && (
+      {fileUrl && (
         <div>
           <p className="text-xs font-medium text-gray-500 mb-2">Document</p>
           {doc.fileType?.startsWith('image/') ? (
-            <img src={doc.fileData} alt={doc.name} className="w-full rounded-xl object-contain max-h-64 bg-gray-50" />
-          ) : doc.fileType === 'application/pdf' ? (
-            <div className="bg-gray-50 rounded-xl p-4 text-center">
-              <FileText size={32} className="text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">{doc.fileName}</p>
+            <div
+              onClick={() => setFullscreenImage(true)}
+              className="relative cursor-pointer group rounded-xl overflow-hidden bg-gray-50"
+            >
+              <img
+                src={fileUrl}
+                alt={doc.name}
+                className="w-full object-contain max-h-64 group-hover:opacity-90 transition-opacity"
+              />
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                <span className="text-white text-sm font-medium">Click to expand</span>
+              </div>
             </div>
+          ) : doc.fileType === 'application/pdf' ? (
+            <iframe
+              src={fileUrl}
+              title={doc.fileName ?? doc.name}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50"
+              style={{ height: '480px' }}
+            />
           ) : null}
           <button
             onClick={handleDownload}
-            className="mt-2 w-full flex items-center justify-center gap-2 py-2 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-gray-200"
+            className="mt-2 w-full flex items-center justify-center gap-2 py-2 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-gray-200 transition-colors"
           >
             <Download size={14} />
             Download
@@ -208,6 +226,35 @@ function DocViewer({ doc, onClose }: { doc: HealthDocument; onClose: () => void 
         </div>
       )}
       <button onClick={onClose} className="w-full py-2.5 rounded-lg bg-rose-500 text-white text-sm font-medium hover:bg-rose-600">Close</button>
+
+      {/* Fullscreen Image Modal */}
+      {fullscreenImage && fileUrl && doc.fileType?.startsWith('image/') && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4"
+          onClick={() => setFullscreenImage(false)}
+        >
+          <div className="relative w-full h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
+            <img
+              src={fileUrl}
+              alt={doc.name}
+              className="max-w-full max-h-full object-contain"
+            />
+            <button
+              onClick={() => setFullscreenImage(false)}
+              className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <X size={24} className="text-white" />
+            </button>
+            <button
+              onClick={() => { handleDownload(); setFullscreenImage(false); }}
+              className="absolute bottom-4 right-4 flex items-center gap-2 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg transition-colors"
+            >
+              <Download size={16} />
+              Download
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -311,13 +358,30 @@ export function HealthPlanner() {
           filtered.map(doc => {
             const catInfo = getCategoryInfo(doc.category);
             const Icon = catInfo.icon;
+            const fileUrl = doc.fileData || doc.fileUrl;
             return (
               <div
                 key={doc.id}
                 className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3"
               >
-                <div className={`w-10 h-10 ${catInfo.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
-                  <Icon size={18} className={catInfo.color} />
+                {/* Thumbnail */}
+                <div
+                  className="w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50 border border-gray-200 flex items-center justify-center flex-shrink-0 cursor-pointer hover:border-rose-300 transition-colors"
+                  onClick={() => setViewDoc(doc)}
+                >
+                  {doc.fileType?.startsWith('image/') && fileUrl ? (
+                    <img src={fileUrl} alt={doc.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className={`w-full h-full ${catInfo.bg} flex items-center justify-center`}>
+                      {doc.fileType === 'application/pdf' ? (
+                        <div className="text-center">
+                          <FileText size={20} className={catInfo.color} />
+                        </div>
+                      ) : (
+                        <Icon size={20} className={catInfo.color} />
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-700 truncate">{doc.name}</p>
@@ -335,7 +399,7 @@ export function HealthPlanner() {
                     <Eye size={15} className="text-gray-400" />
                   </button>
                   <button
-                    onClick={() => dispatch({ type: 'DELETE_HEALTH_DOC', id: doc.id })}
+                    onClick={async () => { try { await healthDocsApi.deleteHealthDoc(doc.id); } catch (_) { /* ignore */ } finally { dispatch({ type: 'DELETE_HEALTH_DOC', id: doc.id }); } }}
                     className="p-1.5 hover:bg-gray-100 rounded-full"
                   >
                     <Trash2 size={15} className="text-gray-400" />
