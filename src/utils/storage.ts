@@ -8,6 +8,8 @@ const defaultState: AppState = {
   mealLogs: [],
   mealReminders: [],
   mealBudgets: [],
+  dailyMealPlans: [],
+  mealSchedules: [],
   exerciseSessions: [],
   exerciseReminders: [],
   healthDocuments: [],

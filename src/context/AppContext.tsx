@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
-import type { AppState, Pet, MealLog, MealReminder, MealBudget, ExerciseSession, ExerciseReminder, HealthDocument, DistanceUnit } from '../types';
-import { loadState, saveState } from '../utils/storage';
+import type { AppState, Pet, MealLog, MealReminder, MealBudget, DailyMealPlan, MealSchedule, ExerciseSession, ExerciseReminder, HealthDocument, DistanceUnit } from '../types';
+import { loadState, saveState, generateId } from '../utils/storage';
 import * as exerciseApi from '../api/exercise';
 import * as healthDocsApi from '../api/healthDocs';
 import type { HealthDocInput } from '../api/healthDocs';
@@ -17,6 +17,12 @@ type Action =
   | { type: 'UPDATE_MEAL_REMINDER'; reminder: MealReminder }
   | { type: 'DELETE_MEAL_REMINDER'; id: string }
   | { type: 'SET_MEAL_BUDGET'; budget: MealBudget }
+  | { type: 'SET_DAILY_MEAL_PLAN'; plan: DailyMealPlan | Omit<DailyMealPlan, 'id'> }
+  | { type: 'UPDATE_DAILY_MEAL_PLAN'; plan: DailyMealPlan }
+  | { type: 'DELETE_DAILY_MEAL_PLAN'; id: string }
+  | { type: 'ADD_MEAL_SCHEDULE'; schedule: Omit<MealSchedule, 'id'> }
+  | { type: 'UPDATE_MEAL_SCHEDULE'; schedule: MealSchedule }
+  | { type: 'DELETE_MEAL_SCHEDULE'; id: string }
   | { type: 'ADD_EXERCISE_SESSION'; session: Omit<ExerciseSession, 'id'> | ExerciseSession }
   | { type: 'DELETE_EXERCISE_SESSION'; id: string }
   | { type: 'ADD_EXERCISE_REMINDER'; reminder: Omit<ExerciseReminder, 'id'> }
@@ -64,6 +70,26 @@ function reducer(state: AppState, action: Action): AppState {
         : [...state.mealBudgets, action.budget];
       return { ...state, mealBudgets };
     }
+    case 'SET_DAILY_MEAL_PLAN': {
+      const incoming = action.plan as any;
+      const plan = incoming.id ? incoming : { ...action.plan, id: generateId() };
+      const existingIdx = state.dailyMealPlans.findIndex(p => p.petId === plan.petId && p.date === plan.date);
+      if (existingIdx >= 0) {
+        const dailyMealPlans = state.dailyMealPlans.map((p, i) => i === existingIdx ? { ...p, meals: plan.meals } : p);
+        return { ...state, dailyMealPlans };
+      }
+      return { ...state, dailyMealPlans: [plan, ...state.dailyMealPlans] };
+    }
+    case 'UPDATE_DAILY_MEAL_PLAN':
+      return { ...state, dailyMealPlans: state.dailyMealPlans.map(p => p.id === action.plan.id ? action.plan : p) };
+    case 'DELETE_DAILY_MEAL_PLAN':
+      return { ...state, dailyMealPlans: state.dailyMealPlans.filter(p => p.id !== action.id) };
+    case 'ADD_MEAL_SCHEDULE':
+      return { ...state, mealSchedules: [...state.mealSchedules, { ...action.schedule, id: generateId() }] };
+    case 'UPDATE_MEAL_SCHEDULE':
+      return { ...state, mealSchedules: state.mealSchedules.map(s => s.id === action.schedule.id ? action.schedule : s) };
+    case 'DELETE_MEAL_SCHEDULE':
+      return { ...state, mealSchedules: state.mealSchedules.filter(s => s.id !== action.id) };
     case 'ADD_EXERCISE_SESSION': {
       const incoming = action.session as any;
       const session = incoming.id ? (incoming as ExerciseSession) : { ...(action.session as Omit<ExerciseSession, 'id'>), id: generateId() } as ExerciseSession;
@@ -168,6 +194,8 @@ export function useActivePetData() {
   const mealLogs = state.mealLogs.filter(l => l.petId === petId);
   const mealReminders = state.mealReminders.filter(r => r.petId === petId);
   const mealBudget = state.mealBudgets.find(b => b.petId === petId) ?? null;
+  const dailyMealPlans = state.dailyMealPlans.filter(p => p.petId === petId);
+  const mealSchedules = state.mealSchedules.filter(s => s.petId === petId);
   const exerciseSessions = state.exerciseSessions.filter(s => s.petId === petId);
   const exerciseReminders = state.exerciseReminders.filter(r => r.petId === petId);
   const healthDocuments = state.healthDocuments.filter(d => d.petId === petId);
@@ -187,6 +215,8 @@ export function useActivePetData() {
     mealLogs,
     mealReminders,
     mealBudget,
+    dailyMealPlans,
+    mealSchedules,
     exerciseSessions,
     exerciseReminders,
     healthDocuments,
